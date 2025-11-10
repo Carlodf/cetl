@@ -1,5 +1,3 @@
-# Tufano data analysis
-
 ## Project layout
 
 ```
