@@ -1,4 +1,4 @@
-package openers
+package opener
 
 import (
 	"os"
