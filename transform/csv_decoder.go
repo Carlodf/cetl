@@ -85,7 +85,7 @@ func NewCSVDecoder(opt CSVDecoderOptions) Decoder {
 func (d *csvDecoder) Decode(ctx context.Context, rc connector.SrcAwareStreamer) (RecordIterator, error) {
 	csvReader := csv.NewReader(rc)
 	csvReader.Comma = d.comma
-	csvReader.ReuseRecord = false
+	csvReader.ReuseRecord = true
 	csvReader.TrimLeadingSpace = true
 	var csvHeader []string
 	csvHeaderInferred := len(d.header) == 0
@@ -163,7 +163,7 @@ func (it *csvRowIterator) Next() bool {
 				return false
 			}
 			// 2) if header discrs row and keep looping
-			if it.isheader(row) {
+			if it.isHeader(row) {
 				// Source-local header row: drop it and continue the loop
 				// to read the first data row of this source
 				it.atStart = false
@@ -238,9 +238,7 @@ func (s sliceExtractor) Len() int {
 
 // Names returns a copy of the header names for this record.
 func (s sliceExtractor) Names() []string {
-	names := make([]string, 0)
-	names = append(names, s.header...)
-	return names
+	return append([]string(nil), s.header...)
 }
 
 // Meta returns the source metadata associated with this record.
@@ -253,7 +251,7 @@ func (s sliceExtractor) Meta() connector.SrcMeta {
 //
 
 // isheader reports whether row matches the canonical header exactly.
-func (it *csvRowIterator) isheader(row []string) bool {
+func (it *csvRowIterator) isHeader(row []string) bool {
 	hSize, rSize := len(it.header), len(row)
 	if hSize != rSize {
 		return false

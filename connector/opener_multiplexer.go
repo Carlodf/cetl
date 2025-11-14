@@ -110,16 +110,36 @@ func NewMuxReader(ctx context.Context, ops []opener.Opener) SrcAwareStreamer {
 	}
 
 	go func() {
-		defer drainAndCloseChannel(m.boundary)
-		defer pw.Close()
+		defer func() {
+			drainAndCloseChannel(m.boundary)
+			_ = m.pw.Close()
+		}()
 
 		buf := make([]byte, 32*1024)
 		for _, op := range ops {
+			// Fast exit if already caneled before opening next source.
+			select {
+			case <-ctx.Done():
+				_ = m.pw.CloseWithError(ctx.Err())
+				return
+			default:
+			}
+
 			rc, err := op.Open(ctx)
 			if err != nil {
 				_ = pw.CloseWithError(fmt.Errorf("open %s: %w", op.Name(), err))
 				return
 			}
+			done := make(chan struct{})
+			go func(rc io.ReadCloser, done <-chan struct{}) {
+				select {
+				case <-ctx.Done():
+					_ = rc.Close()
+					_ = m.pw.CloseWithError(ctx.Err())
+				case <-done:
+				}
+			}(rc, done)
+
 			meta := SrcMeta{
 				Name:       op.Name(),
 				ByteOffset: 0,
@@ -134,18 +154,25 @@ func NewMuxReader(ctx context.Context, ops []opener.Opener) SrcAwareStreamer {
 
 			// Stream bytes
 			for {
+				// Proactively check for cancellation between reads.
+				select {
+				case <-ctx.Done():
+					_ = rc.Close()
+					_ = m.pw.CloseWithError(ctx.Err())
+					return
+				default:
+				}
 				n, rerr := rc.Read(buf)
 				// If n > 0 write on the Pipe before evaluating error as to
 				// provide partial bytes in case of read error.
 				if n > 0 {
-					meta.ByteOffset += int64(n)
-
 					// If writing to Pipe close with error and return.
 					if _, werr := m.pw.Write(buf[:n]); werr != nil {
-						rc.Close()
+						_ = rc.Close()
 						_ = pw.CloseWithError(werr)
 						return
 					}
+					meta.ByteOffset += int64(n)
 					m.current.Store(meta)
 				}
 				if rerr == io.EOF {
@@ -157,7 +184,8 @@ func NewMuxReader(ctx context.Context, ops []opener.Opener) SrcAwareStreamer {
 					return
 				}
 			}
-			rc.Close()
+			close(done)
+			_ = rc.Close()
 		}
 	}()
 	return m

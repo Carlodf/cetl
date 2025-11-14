@@ -101,7 +101,6 @@ func TestMuxReader_Concats_Boundaries_Current(t *testing.T) {
 	}
 
 	// Second boundary should have arrived for "b".
-	time.Sleep(time.Second * 1)
 	if e := <-err2ch; e != nil && e != io.EOF {
 		t.Fatalf("AwaitBoundary #2 sould return ROF. err: %v", e)
 	}

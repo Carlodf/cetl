@@ -4,10 +4,6 @@ COVER_HTML = cover.html
 
 .PHONY: test cover cover-html cover-view clean
 
-# Run all tests (fast)
-test:
-	go test $(PKGS)
-
 # Generate coverage profile
 cover:
 	go test $(PKGS) -coverprofile=$(COVER_OUT)
